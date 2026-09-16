@@ -52,7 +52,7 @@ const mcpHandler = createMcpHandler((server) => {
       inputSchema: z.object({
         title: z.string().min(1),
         subject: z.string().min(1),
-        file_url: z.string().url().optional(),
+        file_url: z.union([z.string().url(), z.literal("")]).default(""),
         author_name: z.string().optional(),
         author_email: z.string().email().optional(),
         author_photo: z.string().url().optional(),
