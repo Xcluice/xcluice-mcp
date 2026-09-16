@@ -21,27 +21,22 @@ function isAuthorized(secret: string): boolean {
 }
 
 const mcpHandler = createMcpHandler((server) => {
-  // ----- Tasks (homework/todo equivalent) -----
+  // ----- Homework -----
   server.registerTool(
-    "list_tasks",
+    "list_homework",
     {
-      title: "List Tasks",
-      description: "List tasks/study todos, optionally filtered by done status or priority.",
+      title: "List Homework",
+      description: "List homework/assignment entries from the Xcluice homework feed, most recent first.",
       inputSchema: z.object({
         limit: z.number().int().min(1).max(100).default(20),
-        done: z.boolean().optional(),
-        priority: z.enum(["low", "medium", "high"]).optional(),
       }),
     },
-    async ({ limit, done, priority }) => {
-      let query = supabase
-        .from("tasks")
-        .select("id,name,subject,notes,priority,deadline,hours,done,created_at,updated_at")
+    async ({ limit }) => {
+      const { data, error } = await supabase
+        .from("homework")
+        .select("id,title,subject,file_url,author_name,author_email,created_at")
         .order("created_at", { ascending: false })
         .limit(limit);
-      if (done !== undefined) query = query.eq("done", done);
-      if (priority) query = query.eq("priority", priority);
-      const { data, error } = await query;
       if (error) {
         return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true };
       }
@@ -50,80 +45,73 @@ const mcpHandler = createMcpHandler((server) => {
   );
 
   server.registerTool(
-    "create_task",
+    "create_homework",
     {
-      title: "Create Task",
-      description: "Create a new task/study todo.",
+      title: "Create Homework",
+      description: "Create a new homework/assignment entry in the Xcluice homework feed.",
       inputSchema: z.object({
-        id: z.string().min(1).describe("A unique id you choose for this task, e.g. a slug or uuid."),
-        user_id: z.string().uuid().describe("The Supabase auth user id this task belongs to."),
-        name: z.string().min(1),
-        subject: z.string().optional(),
-        notes: z.string().optional(),
-        priority: z.enum(["low", "medium", "high"]).default("medium"),
-        deadline: z.string().optional().describe("Date in YYYY-MM-DD format."),
-        hours: z.number().optional(),
+        title: z.string().min(1),
+        subject: z.string().min(1),
+        file_url: z.string().url().optional(),
+        author_name: z.string().optional(),
+        author_email: z.string().email().optional(),
+        author_photo: z.string().url().optional(),
       }),
     },
     async (input) => {
-      const { data, error } = await supabase.from("tasks").insert(input).select().single();
+      const { data, error } = await supabase.from("homework").insert(input).select().single();
       if (error) {
         return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true };
       }
-      return { content: [{ type: "text", text: `Created task:\n${JSON.stringify(data, null, 2)}` }] };
+      return { content: [{ type: "text", text: `Created homework entry:\n${JSON.stringify(data, null, 2)}` }] };
     }
   );
 
   server.registerTool(
-    "update_task",
+    "update_homework",
     {
-      title: "Update Task",
-      description: "Update an existing task by id — edit fields or mark it done.",
+      title: "Update Homework",
+      description: "Update an existing homework/assignment entry by id.",
       inputSchema: z.object({
-        id: z.string().min(1),
-        name: z.string().optional(),
+        id: z.number().int(),
+        title: z.string().optional(),
         subject: z.string().optional(),
-        notes: z.string().optional(),
-        priority: z.enum(["low", "medium", "high"]).optional(),
-        deadline: z.string().optional(),
-        hours: z.number().optional(),
-        done: z.boolean().optional(),
+        file_url: z.string().url().optional(),
       }),
     },
     async ({ id, ...fields }) => {
-      const updates: Record<string, unknown> = Object.fromEntries(
-        Object.entries(fields).filter(([, v]) => v !== undefined)
-      );
+      const updates = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
       if (Object.keys(updates).length === 0) {
         return { content: [{ type: "text", text: "No fields provided to update." }], isError: true };
       }
-      updates.updated_at = new Date().toISOString();
-      const { data, error } = await supabase.from("tasks").update(updates).eq("id", id).select().single();
+      const { data, error } = await supabase.from("homework").update(updates).eq("id", id).select().single();
       if (error) {
         return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true };
       }
-      return { content: [{ type: "text", text: `Updated task:\n${JSON.stringify(data, null, 2)}` }] };
+      return { content: [{ type: "text", text: `Updated homework entry:\n${JSON.stringify(data, null, 2)}` }] };
     }
   );
 
-  // ----- Social feed (messages/posts equivalent) -----
+  // ----- Chat -----
   server.registerTool(
-    "list_social_posts",
+    "list_chat_messages",
     {
-      title: "List Social Posts",
-      description: "List recent posts from the social/study feed, optionally filtered by tag.",
+      title: "List Chat Messages",
+      description: "List recent chat messages, optionally filtered by sender (uid) or recipient (to_uid).",
       inputSchema: z.object({
-        limit: z.number().int().min(1).max(100).default(20),
-        tag: z.string().optional(),
+        limit: z.number().int().min(1).max(200).default(50),
+        uid: z.string().optional(),
+        to_uid: z.string().optional(),
       }),
     },
-    async ({ limit, tag }) => {
+    async ({ limit, uid, to_uid }) => {
       let query = supabase
-        .from("social_posts")
-        .select("id,author,body,tag,created_at")
+        .from("chat_messages")
+        .select("id,uid,name,text,to_uid,created_at")
         .order("created_at", { ascending: false })
         .limit(limit);
-      if (tag) query = query.eq("tag", tag);
+      if (uid) query = query.eq("uid", uid);
+      if (to_uid) query = query.eq("to_uid", to_uid);
       const { data, error } = await query;
       if (error) {
         return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true };
@@ -133,41 +121,61 @@ const mcpHandler = createMcpHandler((server) => {
   );
 
   server.registerTool(
-    "create_social_post",
+    "post_chat_message",
     {
-      title: "Create Social Post",
-      description: "Post a new entry to the social/study feed.",
+      title: "Post Chat Message",
+      description:
+        "Post a new chat message as a given user (uid/name), optionally as a direct message to another uid (to_uid).",
       inputSchema: z.object({
-        author: z.string().min(1),
-        body: z.string().min(1),
-        tag: z.string().default("tip"),
+        uid: z.string().min(1),
+        name: z.string().min(1),
+        text: z.string().min(1),
+        to_uid: z.string().optional(),
       }),
     },
     async (input) => {
-      const { data, error } = await supabase.from("social_posts").insert(input).select().single();
+      const { data, error } = await supabase.from("chat_messages").insert(input).select().single();
       if (error) {
         return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true };
       }
-      return { content: [{ type: "text", text: `Created post:\n${JSON.stringify(data, null, 2)}` }] };
+      return { content: [{ type: "text", text: `Posted message:\n${JSON.stringify(data, null, 2)}` }] };
     }
   );
 
   // ----- Users -----
   server.registerTool(
-    "list_users",
+    "list_chat_users",
     {
-      title: "List Users",
-      description: "List app users (sp_users). Never returns password hashes.",
+      title: "List Chat Users",
+      description: "List chat users (uid, name, email, last active).",
       inputSchema: z.object({
         limit: z.number().int().min(1).max(100).default(50),
       }),
     },
     async ({ limit }) => {
       const { data, error } = await supabase
-        .from("sp_users")
-        .select("id,username,created_at")
-        .order("created_at", { ascending: false })
+        .from("chat_users")
+        .select("uid,name,email,last_active")
+        .order("last_active", { ascending: false })
         .limit(limit);
+      if (error) {
+        return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true };
+      }
+      return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    "list_team_members",
+    {
+      title: "List Team Members",
+      description: "List Xcluice/Fosthub team members (username, display name, role). Never returns password hashes.",
+      inputSchema: z.object({}),
+    },
+    async () => {
+      const { data, error } = await supabase
+        .from("fosthub_users")
+        .select("id,username,display_name,role,avatar_url,created_at,last_active");
       if (error) {
         return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true };
       }
