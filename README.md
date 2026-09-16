@@ -1,8 +1,9 @@
 # Xcluice MCP Server
 
 A private MCP (Model Context Protocol) server that lets Claude read and
-write data in the Xcluice/Fosthub Supabase backend ("We learn" project) —
-homework entries and chat messages.
+write data in Xcluice's real backend — the "StudyHub" Supabase project
+(`nzolsmouyulzqeaocejm`), the same one the Xcluice app itself connects to.
+Exposes homework entries and chat messages.
 
 ## What it exposes
 
@@ -21,8 +22,9 @@ homework entries and chat messages.
 This server uses the **service role key** (not the anon key), since it
 needs to bypass Row Level Security to read/write freely.
 
-1. Go to your Supabase dashboard → the "We learn" project
-   (`nzolsmouyulzqeaocejm`)
+1. Go to your Supabase dashboard → the "StudyHub" project
+   (`nzolsmouyulzqeaocejm`) — this is the same project the main Xcluice
+   app connects to
 2. Project Settings → API → copy the **service_role** secret key
 3. Keep this secret — it has full access to your database
 
